@@ -2519,8 +2519,7 @@ QmlMainWindow::QmlMainWindow(const StreamSessionConnectInfo &connect_info)
     init(connect_info.settings);
     backend->createSession(connect_info);
 
-    if (connect_info.fullscreen || connect_info.zoom || connect_info.stretch)
-        fullscreenTime();
+    applyStreamWindowMode(connect_info.window_mode);
     if (connect_info.zoom)
         setVideoMode(VideoMode::Zoom);
     else if (connect_info.stretch)
@@ -2667,6 +2666,10 @@ QmlMainWindow::~QmlMainWindow()
 
 void QmlMainWindow::updateWindowType(WindowType type)
 {
+    // WindowType now only selects the video scaling mode. The window chrome
+    // (windowed / maximized / fullscreen) is controlled separately via
+    // Settings::GetStreamWindowMode() so a stream is no longer forced
+    // fullscreen. Apply both: video mode from type, chrome from setting.
     switch (type) {
     case WindowType::SelectedResolution:
         setVideoMode(VideoMode::Normal);
@@ -2674,21 +2677,23 @@ void QmlMainWindow::updateWindowType(WindowType type)
     case WindowType::CustomResolution:
         setVideoMode(VideoMode::Normal);
         break;
+    case WindowType::AdjustableResolution:
+        setVideoMode(VideoMode::Normal);
+        break;
     case WindowType::Fullscreen:
-        fullscreenTime();
         setVideoMode(VideoMode::Normal);
         break;
     case WindowType::Zoom:
-        fullscreenTime();
         setVideoMode(VideoMode::Zoom);
         break;
     case WindowType::Stretch:
-        fullscreenTime();
         setVideoMode(VideoMode::Stretch);
         break;
     default:
         break;
     }
+    if(settings)
+        applyStreamWindowMode(settings->GetStreamWindowMode());
 }
 
 bool QmlMainWindow::hasVideo() const
@@ -5281,6 +5286,8 @@ void QmlMainWindow::drainRenderThread()
 
 void QmlMainWindow::normalTime()
 {
+    // Legacy restore helper used by F11 / double-click: leave fullscreen and
+    // return to maximized when we came from there.
     if(windowState() == Qt::WindowFullScreen)
     {
         if(was_maximized)
@@ -5300,6 +5307,65 @@ void QmlMainWindow::normalTime()
             setWindowAdjustable(true);
         }
     });
+}
+
+void QmlMainWindow::windowedTime()
+{
+    // Force a floating window regardless of previous state.
+    was_maximized = false;
+    const Qt::WindowStates state = windowState();
+    if(state & Qt::WindowFullScreen)
+        showNormal();
+    else if(state & Qt::WindowMaximized)
+        showNormal();
+    setMinimumSize(QSize(0, 0));
+    QTimer::singleShot(1000, this, [this]{
+        if(session)
+            setStreamWindowAdjustable(true);
+        else
+        {
+            setWindowAdjustable(true);
+        }
+    });
+}
+
+void QmlMainWindow::maximizedTime()
+{
+    if((windowState() & Qt::WindowFullScreen))
+    {
+        // Remember nothing extra: leaving fullscreen to maximized is explicit.
+        showMaximized();
+        was_maximized = false;
+        setMinimumSize(QSize(0, 0));
+    }
+    else if(!(windowState() & Qt::WindowMaximized))
+    {
+        if(session)
+            setStreamWindowAdjustable(false);
+        else
+            setWindowAdjustable(false);
+        setMinimumSize(size());
+        showMaximized();
+    }
+    // Maximized windows must not persist manual geometry; re-enable
+    // adjustability only once back to floating windowed mode.
+}
+
+void QmlMainWindow::applyStreamWindowMode(StreamWindowMode mode)
+{
+    switch(mode)
+    {
+    case StreamWindowMode::Fullscreen:
+        fullscreenTime();
+        break;
+    case StreamWindowMode::Maximized:
+        maximizedTime();
+        break;
+    case StreamWindowMode::Windowed:
+    default:
+        windowedTime();
+        break;
+    }
 }
 
 void QmlMainWindow::fullscreenTime()

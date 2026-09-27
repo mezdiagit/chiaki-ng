@@ -136,7 +136,10 @@ public:
     void setWindowAdjustable(bool adjustable) { is_window_adjustable = adjustable; }
 
     void fullscreenTime();
+    void maximizedTime();
+    void windowedTime();
     void normalTime();
+    void applyStreamWindowMode(StreamWindowMode mode);
 
     bool isStreamWindowAdjustable() { return is_stream_window_adjustable; }
     void setStreamWindowAdjustable(bool adjustable) { is_stream_window_adjustable = adjustable; }

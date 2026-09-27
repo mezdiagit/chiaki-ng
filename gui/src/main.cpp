@@ -162,6 +162,12 @@ int real_main(int argc, char *argv[])
 	QCommandLineOption fullscreen_option("fullscreen", "Start window in fullscreen mode [maintains aspect ratio, adds black bars to fill unsused parts of screen if applicable] (only for use with stream command).");
 	parser.addOption(fullscreen_option);
 
+	QCommandLineOption windowed_option("windowed", "Start stream in a floating window with custom size (overrides fullscreen/zoom/stretch window chrome, video scaling still applies).");
+	parser.addOption(windowed_option);
+
+	QCommandLineOption maximized_option("maximized", "Start stream in a maximized window (not fullscreen).");
+	parser.addOption(maximized_option);
+
 	QCommandLineOption dualsense_option("dualsense", "Enable DualSense haptics and adaptive triggers (PS5 and DualSense connected via USB only).");
 	parser.addOption(dualsense_option);
 
@@ -173,6 +179,18 @@ int real_main(int argc, char *argv[])
 
 	QCommandLineOption passcode_option("passcode", "Automatically send your PlayStation login passcode (only affects users with a login passcode set on their PlayStation console).", "passcode");
 	parser.addOption(passcode_option);
+
+	QCommandLineOption enable_automation_option("enable-automation", "Enable local automation/AI HTTP+UDP API (same as settings automation_enabled). Disabled by default.");
+	parser.addOption(enable_automation_option);
+
+	QCommandLineOption automation_port_option("automation-port", "Local HTTP automation API port (0 = disabled).", "port");
+	parser.addOption(automation_port_option);
+
+	QCommandLineOption automation_udp_port_option("automation-udp-port", "Local UDP automation input port (0 = disabled).", "port");
+	parser.addOption(automation_udp_port_option);
+
+	QCommandLineOption automation_token_option("automation-token", "Require this token for HTTP automation API (X-Chiaki-Token header or ?token=).", "token");
+	parser.addOption(automation_token_option);
 
 	parser.process(app);
 	QStringList args = parser.positionalArguments();
@@ -188,8 +206,19 @@ int real_main(int argc, char *argv[])
 	if(!parser.isSet(profile_option))
 		use_alt_settings = true;
 
+	Settings *active_settings = use_alt_settings ? &alt_settings : &settings;
+	// CLI overrides for automation (take precedence over stored settings).
+	if(parser.isSet(enable_automation_option))
+		active_settings->SetAutomationEnabled(true);
+	if(parser.isSet(automation_port_option))
+		active_settings->SetAutomationPort(parser.value(automation_port_option).toInt());
+	if(parser.isSet(automation_udp_port_option))
+		active_settings->SetAutomationUdpPort(parser.value(automation_udp_port_option).toInt());
+	if(parser.isSet(automation_token_option))
+		active_settings->SetAutomationToken(parser.value(automation_token_option));
+
 	if(args.length() == 0)
-		return RunMain(app, use_alt_settings ? &alt_settings : &settings, exit_app_on_stream_exit);
+		return RunMain(app, active_settings, exit_app_on_stream_exit);
 
 	if(args[0] == "list")
 	{
@@ -259,6 +288,11 @@ int real_main(int argc, char *argv[])
 			printf("Must choose between fullscreen, zoom or stretch option.");
 			return 1;
 		}
+		if(parser.isSet(windowed_option) && parser.isSet(maximized_option))
+		{
+			printf("Must choose between windowed or maximized option.");
+			return 1;
+		}
 		if(parser.value(passcode_option).isEmpty())
 		{
 			//Set to empty if it wasn't given by user.
@@ -273,9 +307,19 @@ int real_main(int argc, char *argv[])
 				return 1;
 			}
 		}
-		
+
+		StreamWindowMode cli_window_mode = StreamWindowMode::Windowed;
+		if(parser.isSet(windowed_option))
+			cli_window_mode = StreamWindowMode::Windowed;
+		else if(parser.isSet(maximized_option))
+			cli_window_mode = StreamWindowMode::Maximized;
+		else if(parser.isSet(fullscreen_option) || parser.isSet(zoom_option) || parser.isSet(stretch_option))
+			cli_window_mode = StreamWindowMode::Fullscreen;
+		else
+			cli_window_mode = active_settings->GetStreamWindowMode();
+
 		StreamSessionConnectInfo connect_info(
-				use_alt_settings ? &alt_settings : &settings,
+				active_settings,
 				target,
 				std::move(host),
 				QString(),
@@ -286,7 +330,8 @@ int real_main(int argc, char *argv[])
 				false,
 				parser.isSet(fullscreen_option),
 				parser.isSet(zoom_option),
-				parser.isSet(stretch_option));
+				parser.isSet(stretch_option),
+				cli_window_mode);
 
 		return RunStream(app, connect_info);
 	}

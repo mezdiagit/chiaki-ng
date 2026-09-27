@@ -10,6 +10,7 @@ nav:
     - Configuration: setup/configuration.md
     - Remote Connection: setup/remoteconnection.md
     - Automation: setup/automation.md
+    - AI Remote API: setup/ai-remote-api.md
     - Game (Mode) Time: setup/steaming.md
     - Controller Options: setup/controlling.md
   - Updates:

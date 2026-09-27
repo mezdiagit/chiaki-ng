@@ -630,6 +630,159 @@ DialogView {
                                 Layout.alignment: Qt.AlignRight
                                 text: qsTr("(Checked)")
                             }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Automation API (AI control):")
+                            }
+
+                            C.CheckBox {
+                                checked: Chiaki.settings.automationEnabled
+                                onToggled: Chiaki.settings.automationEnabled = checked
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(Unchecked)")
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Automation Exclusive Input:")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            C.CheckBox {
+                                visible: Chiaki.settings.automationEnabled
+                                checked: Chiaki.settings.automationExclusive
+                                onToggled: Chiaki.settings.automationExclusive = checked
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(Unchecked)")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Automation TCP Port:")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            C.TextField {
+                                Layout.preferredWidth: 400
+                                visible: Chiaki.settings.automationEnabled
+                                text: Chiaki.settings.automationPort
+                                onEditingFinished: {
+                                    var num = parseInt(text);
+                                    if (num >= 0 && num <= 65535)
+                                        Chiaki.settings.automationPort = num;
+                                }
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(19090, 0=off)")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Automation UDP Port:")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            C.TextField {
+                                Layout.preferredWidth: 400
+                                visible: Chiaki.settings.automationEnabled
+                                text: Chiaki.settings.automationUdpPort
+                                onEditingFinished: {
+                                    var num = parseInt(text);
+                                    if (num >= 0 && num <= 65535)
+                                        Chiaki.settings.automationUdpPort = num;
+                                }
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(19091, 0=off)")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Automation Token:")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            C.TextField {
+                                Layout.preferredWidth: 400
+                                visible: Chiaki.settings.automationEnabled
+                                echoMode: TextInput.Password
+                                text: Chiaki.settings.automationToken
+                                onEditingFinished: Chiaki.settings.automationToken = text
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(empty=none)")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Publish Frames (AI vision):")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            C.CheckBox {
+                                visible: Chiaki.settings.automationEnabled
+                                checked: Chiaki.settings.framePublishEnabled
+                                onToggled: Chiaki.settings.framePublishEnabled = checked
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(Checked)")
+                                visible: Chiaki.settings.automationEnabled
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Frame Size (W x H):")
+                                visible: Chiaki.settings.automationEnabled && Chiaki.settings.framePublishEnabled
+                            }
+
+                            RowLayout {
+                                visible: Chiaki.settings.automationEnabled && Chiaki.settings.framePublishEnabled
+                                spacing: 8
+                                C.TextField {
+                                    Layout.preferredWidth: 120
+                                    text: Chiaki.settings.framePublishWidth
+                                    onEditingFinished: {
+                                        var num = parseInt(text);
+                                        if (num >= 160 && num <= 3840)
+                                            Chiaki.settings.framePublishWidth = num;
+                                    }
+                                }
+                                Label { text: qsTr("x") }
+                                C.TextField {
+                                    Layout.preferredWidth: 120
+                                    text: Chiaki.settings.framePublishHeight
+                                    onEditingFinished: {
+                                        var num = parseInt(text);
+                                        if (num >= 90 && num <= 2160)
+                                            Chiaki.settings.framePublishHeight = num;
+                                    }
+                                }
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(960x540)")
+                                visible: Chiaki.settings.automationEnabled && Chiaki.settings.framePublishEnabled
+                            }
                         }
                         RowLayout {
                             spacing: 10
@@ -802,9 +955,28 @@ DialogView {
                         id: windowTypeCombo
                         Layout.preferredWidth: 400
                         popup.width: 500
-                        model: [qsTr("Stream Resolution"), qsTr("Custom Resolution"), qsTr("Adjust Resolution Manually"), qsTr("Fullscreen"), qsTr("Zoom [adjust zoom using slider in stream menu]"), qsTr("Stretch")]
+                        model: [qsTr("Stream Resolution"), qsTr("Custom Resolution"), qsTr("Adjust Resolution Manually"), qsTr("Fullscreen (video fit)"), qsTr("Zoom [adjust zoom using slider in stream menu]"), qsTr("Stretch")]
                         currentIndex: Chiaki.settings.windowType
                         onActivated: (index) => Chiaki.settings.windowType = index;
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("(Fullscreen)")
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("Stream Window Mode:")
+                    }
+
+                    C.ComboBox {
+                        id: streamWindowModeCombo
+                        Layout.preferredWidth: 400
+                        popup.width: 500
+                        model: [qsTr("Windowed (custom size)"), qsTr("Maximized (not fullscreen)"), qsTr("Fullscreen")]
+                        currentIndex: Chiaki.settings.streamWindowMode
+                        onActivated: (index) => Chiaki.settings.streamWindowMode = index;
                     }
 
                     Label {

@@ -156,7 +156,7 @@ else()
 endif()
 
 if(CHIAKI_ENABLE_FFMPEG_DECODER)
-	find_package(FFMPEG COMPONENTS avcodec avutil avformat)
+	find_package(FFMPEG COMPONENTS avcodec avutil avformat swscale)
 	if(FFMPEG_FOUND)
 		set(CHIAKI_ENABLE_FFMPEG_DECODER ON)
 	else()

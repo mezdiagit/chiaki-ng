@@ -7,7 +7,7 @@ if(APPLE)
 	enable_language(OBJCXX)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Concurrent Svg Qml Quick Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Concurrent Svg Qml Quick Widgets Network)
 if(Qt6_VERSION VERSION_GREATER_EQUAL "6.10.0")
 	find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
 endif()
@@ -41,6 +41,10 @@ set(SOURCE_FILES
 	src/psntoken.cpp
 	include/jsonrequester.h
 	src/jsonrequester.cpp
+	include/framepublisher.h
+	src/framepublisher.cpp
+	include/automationserver.h
+	src/automationserver.cpp
 	src/qml/qml.qrc
 	include/qmlmainwindow.h
 	src/qmlmainwindow.cpp
@@ -97,6 +101,9 @@ target_include_directories(chiaki PRIVATE include)
 add_library(placebo-libav-impl src/libav_impl.c)
 target_link_libraries(placebo-libav-impl PkgConfig::LIBPLACEBO FFMPEG::avcodec FFMPEG::avutil FFMPEG::avformat)
 target_link_libraries(chiaki PkgConfig::LIBPLACEBO placebo-libav-impl)
+if(TARGET FFMPEG::swscale)
+	target_link_libraries(chiaki FFMPEG::swscale)
+endif()
 
 target_link_libraries(chiaki chiaki-lib)
 if(CHIAKI_ENABLE_CLI)
@@ -104,7 +111,7 @@ if(CHIAKI_ENABLE_CLI)
 	target_link_libraries(chiaki chiaki-cli-lib)
 endif()
 
-target_link_libraries(chiaki Qt::Core Qt::Gui Qt::GuiPrivate Qt::Concurrent Qt::Svg Qt::Qml Qt::Quick Qt::Widgets)
+target_link_libraries(chiaki Qt::Core Qt::Gui Qt::GuiPrivate Qt::Concurrent Qt::Svg Qt::Qml Qt::Quick Qt::Widgets Qt::Network)
 if (${Qt6DBus_FOUND} AND NOT WIN32)
 	target_link_libraries(chiaki Qt::DBus)
 if (NOT APPLE)

@@ -787,6 +787,23 @@ void Settings::SetWindowType(WindowType type)
 	settings.setValue("settings/window_type", window_type_values[type]);
 }
 
+static const QMap<StreamWindowMode, QString> stream_window_mode_values = {
+	{ StreamWindowMode::Windowed, "Windowed" },
+	{ StreamWindowMode::Maximized, "Maximized" },
+	{ StreamWindowMode::Fullscreen, "Fullscreen" }
+};
+
+StreamWindowMode Settings::GetStreamWindowMode() const
+{
+	auto v = settings.value("settings/stream_window_mode", stream_window_mode_values[StreamWindowMode::Fullscreen]).toString();
+	return stream_window_mode_values.key(v, StreamWindowMode::Fullscreen);
+}
+
+void Settings::SetStreamWindowMode(StreamWindowMode mode)
+{
+	settings.setValue("settings/stream_window_mode", stream_window_mode_values[mode]);
+}
+
 uint Settings::GetCustomResolutionWidth() const
 {
 	return settings.value("settings/custom_resolution_width", 1920).toUInt();

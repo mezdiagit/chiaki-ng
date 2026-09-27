@@ -56,6 +56,16 @@ class QmlSettings : public QObject
     Q_PROPERTY(bool useZeroCopy READ useZeroCopy WRITE setUseZeroCopy NOTIFY useZeroCopyChanged)
     Q_PROPERTY(bool vulkanDeferredSwap READ vulkanDeferredSwap WRITE setVulkanDeferredSwap NOTIFY vulkanDeferredSwapChanged)
     Q_PROPERTY(int windowType READ windowType WRITE setWindowType NOTIFY windowTypeChanged)
+    Q_PROPERTY(int streamWindowMode READ streamWindowMode WRITE setStreamWindowMode NOTIFY streamWindowModeChanged)
+    Q_PROPERTY(bool automationEnabled READ automationEnabled WRITE setAutomationEnabled NOTIFY automationEnabledChanged)
+    Q_PROPERTY(bool automationExclusive READ automationExclusive WRITE setAutomationExclusive NOTIFY automationExclusiveChanged)
+    Q_PROPERTY(int automationPort READ automationPort WRITE setAutomationPort NOTIFY automationPortChanged)
+    Q_PROPERTY(int automationUdpPort READ automationUdpPort WRITE setAutomationUdpPort NOTIFY automationUdpPortChanged)
+    Q_PROPERTY(QString automationToken READ automationToken WRITE setAutomationToken NOTIFY automationTokenChanged)
+    Q_PROPERTY(bool framePublishEnabled READ framePublishEnabled WRITE setFramePublishEnabled NOTIFY framePublishEnabledChanged)
+    Q_PROPERTY(int framePublishWidth READ framePublishWidth WRITE setFramePublishWidth NOTIFY framePublishWidthChanged)
+    Q_PROPERTY(int framePublishHeight READ framePublishHeight WRITE setFramePublishHeight NOTIFY framePublishHeightChanged)
+    Q_PROPERTY(int framePublishQuality READ framePublishQuality WRITE setFramePublishQuality NOTIFY framePublishQualityChanged)
     Q_PROPERTY(uint customResolutionWidth READ customResolutionWidth WRITE setCustomResolutionWidth NOTIFY customResolutionWidthChanged)
     Q_PROPERTY(uint customResolutionHeight READ customResolutionHeight WRITE setCustomResolutionHeight NOTIFY customResolutionHeightChanged)
     Q_PROPERTY(int videoPreset READ videoPreset WRITE setVideoPreset NOTIFY videoPresetChanged)
@@ -300,6 +310,28 @@ public:
 
     int windowType() const;
     void setWindowType(int type);
+
+    int streamWindowMode() const;
+    void setStreamWindowMode(int mode);
+
+    bool automationEnabled() const;
+    void setAutomationEnabled(bool enabled);
+    bool automationExclusive() const;
+    void setAutomationExclusive(bool exclusive);
+    int automationPort() const;
+    void setAutomationPort(int port);
+    int automationUdpPort() const;
+    void setAutomationUdpPort(int port);
+    QString automationToken() const;
+    void setAutomationToken(const QString &token);
+    bool framePublishEnabled() const;
+    void setFramePublishEnabled(bool enabled);
+    int framePublishWidth() const;
+    void setFramePublishWidth(int w);
+    int framePublishHeight() const;
+    void setFramePublishHeight(int h);
+    int framePublishQuality() const;
+    void setFramePublishQuality(int q);
 
     uint customResolutionWidth() const;
     void setCustomResolutionWidth(uint width);
@@ -668,6 +700,16 @@ signals:
     void decoderChanged();
     void useZeroCopyChanged();
     void windowTypeChanged();
+    void streamWindowModeChanged();
+    void automationEnabledChanged();
+    void automationExclusiveChanged();
+    void automationPortChanged();
+    void automationUdpPortChanged();
+    void automationTokenChanged();
+    void framePublishEnabledChanged();
+    void framePublishWidthChanged();
+    void framePublishHeightChanged();
+    void framePublishQualityChanged();
     void customResolutionWidthChanged();
     void customResolutionHeightChanged();
     void sZoomFactorChanged();

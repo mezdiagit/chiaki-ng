@@ -6,6 +6,8 @@
 #include "psnaccountid.h"
 #include "psntoken.h"
 #include "systemdinhibit.h"
+#include "framepublisher.h"
+#include "automationserver.h"
 #include "chiaki/remote/holepunch.h"
 #ifdef Q_OS_MACOS
 #include "macWakeSleep.h"
@@ -413,6 +415,24 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
         emit wakeupStartFailed();
     });
     psn_auto_connect_timer->start(PSN_INTERNET_WAIT_SECONDS * 1000);
+    frame_publisher = new FramePublisher(settings, this);
+    automation_server = new AutomationServer(settings, this, window, frame_publisher, this);
+    automation_server->start();
+    connect(settings_qml, &QmlSettings::automationEnabledChanged, this, &QmlBackend::restartAutomationServer);
+    connect(settings_qml, &QmlSettings::automationPortChanged, this, &QmlBackend::restartAutomationServer);
+    connect(settings_qml, &QmlSettings::automationUdpPortChanged, this, &QmlBackend::restartAutomationServer);
+    connect(settings_qml, &QmlSettings::automationTokenChanged, this, &QmlBackend::restartAutomationServer);
+    connect(settings_qml, &QmlSettings::automationExclusiveChanged, this, [this]() {
+        if(session)
+            session->SetAutomationExclusive(settings->GetAutomationExclusive());
+    });
+    connect(settings_qml, &QmlSettings::framePublishEnabledChanged, this, [this]() { if(frame_publisher) frame_publisher->refreshConfig(); });
+    connect(settings_qml, &QmlSettings::framePublishWidthChanged, this, [this]() { if(frame_publisher) frame_publisher->refreshConfig(); });
+    connect(settings_qml, &QmlSettings::framePublishHeightChanged, this, [this]() { if(frame_publisher) frame_publisher->refreshConfig(); });
+    connect(settings_qml, &QmlSettings::framePublishQualityChanged, this, [this]() { if(frame_publisher) frame_publisher->refreshConfig(); });
+    connect(settings_qml, &QmlSettings::streamWindowModeChanged, this, [this]() {
+        applyStreamWindowModeAndSizing(settings->GetStreamWindowMode());
+    });
     sleep_inhibit = new SystemdInhibit(QGuiApplication::applicationName(), tr("Remote Play session"), "sleep", "delay", this);
     connect(sleep_inhibit, &SystemdInhibit::sleep, this, &QmlBackend::goToSleep);
     connect(sleep_inhibit, &SystemdInhibit::resume, this, &QmlBackend::resumeFromSleep);
@@ -485,6 +505,8 @@ bool QmlBackend::prepareFrameForPresentation(ChiakiFfmpegFrame &frame, bool use_
 
 QmlBackend::~QmlBackend()
 {
+    if(automation_server)
+        automation_server->stop();
     if(session)
     {
         chiaki_log_mutex.lock();
@@ -523,6 +545,15 @@ void QmlBackend::updateAudioVolume()
 {
     if(session)
         session->SetAudioVolume(settings->GetAudioVolume());
+}
+
+void QmlBackend::restartAutomationServer()
+{
+    if(!automation_server)
+        return;
+    automation_server->restart();
+    if(automation_server->isRunning())
+        qCInfo(chiakiGui) << "Automation API listening on TCP" << automation_server->tcpPort() << "UDP" << automation_server->udpPort();
 }
 
 void QmlBackend::goToSleep()
@@ -565,6 +596,7 @@ void QmlBackend::resumeFromSleep()
                 session_info.fullscreen,
                 session_info.zoom,
                 session_info.stretch,
+                session_info.window_mode,
             });
         }
         else
@@ -599,6 +631,13 @@ void QmlBackend::profileChanged()
     settings_qml->setSettings(settings);
     discovery_manager.SetSettings(settings);
     window->setSettings(settings);
+    if(frame_publisher)
+        frame_publisher->setSettings(settings);
+    if(automation_server)
+    {
+        automation_server->setSettings(settings);
+        automation_server->restart();
+    }
     setDiscoveryEnabled(true);
 
     auto_connect_mac = settings->GetAutoConnectHost().GetServerMAC();
@@ -1103,6 +1142,7 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
         emit error(tr("Stream failed"), tr("Failed to initialize Stream Session: %1").arg(e.what()));
         return;
     }
+    session->SetAutomationExclusive(settings->GetAutomationExclusive());
 
     connect(session, &StreamSession::FfmpegFrameAvailable, frame_thread->parent(), [this, use_opengl_renderer]() {
         ChiakiFfmpegDecoder *decoder = session->GetFfmpegDecoder();
@@ -1134,6 +1174,13 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
 
         if (pending_recovered_frame.fetchAndStoreRelaxed(0) != 0) {
             frame.recovered = true;
+        }
+
+        // Earliest AI tap: publish the software-ready frame on the decoder
+        // thread before handing it to the GUI thread. No-op when disabled.
+        if(frame_publisher && frame.frame)
+        {
+            frame_publisher->publishFrame(frame.frame, frame.pts);
         }
 
         const qint64 delivery_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
@@ -1560,7 +1607,9 @@ void QmlBackend::connectToHost(int index, QString nickname)
     case WindowType::AdjustableResolution:
         break;
     case WindowType::Fullscreen:
-        fullscreen = true;
+        // Fullscreen WindowType now means normal video scaling; the window
+        // chrome comes from StreamWindowMode. Keep legacy flag for CLI compat.
+        fullscreen = (settings->GetStreamWindowMode() == StreamWindowMode::Fullscreen);
         break;
     case WindowType::Zoom:
         zoom = true;
@@ -1571,6 +1620,7 @@ void QmlBackend::connectToHost(int index, QString nickname)
     default:
         break;
     }
+    const StreamWindowMode stream_window_mode = settings->GetStreamWindowMode();
     emit windowTypeUpdated(settings->GetWindowType());
 
     resume_session = false;
@@ -1589,7 +1639,8 @@ void QmlBackend::connectToHost(int index, QString nickname)
                 false,
                 fullscreen,
                 zoom,
-                stretch);
+                stretch,
+                stream_window_mode);
         createSession(info);
     }
     else
@@ -1606,7 +1657,8 @@ void QmlBackend::connectToHost(int index, QString nickname)
                 false,
                 fullscreen,
                 zoom,
-                stretch);
+                stretch,
+                stream_window_mode);
 
         QString expiry_s = settings->GetPsnAuthTokenExpiry();
         QString refresh = settings->GetPsnRefreshToken();
@@ -2375,28 +2427,63 @@ void QmlBackend::prepareStartupPresentation(bool present_warmup)
 
 void QmlBackend::applyStartupWindowSizing()
 {
-    if (!window)
+    if(!settings)
+        return;
+    applyStreamWindowModeAndSizing(settings->GetStreamWindowMode());
+}
+
+void QmlBackend::applyStreamWindowModeAndSizing(StreamWindowMode win_mode)
+{
+    if (!window || !settings)
         return;
 
     const auto &connect_info = session_info;
-    if (window->windowState() == Qt::WindowFullScreen)
-        return;
 
-    if(settings->GetWindowType() == WindowType::CustomResolution)
+    // Size the floating window first (no-op for fullscreen/maximized chrome).
+    if(win_mode == StreamWindowMode::Windowed && window->windowState() != Qt::WindowFullScreen)
     {
-        window->resize(settings->GetCustomResolutionWidth(), settings->GetCustomResolutionHeight());
-        window->setMaximumSize(QSize(settings->GetCustomResolutionWidth(), settings->GetCustomResolutionHeight()));
+        if(settings->GetWindowType() == WindowType::CustomResolution)
+        {
+            window->resize(settings->GetCustomResolutionWidth(), settings->GetCustomResolutionHeight());
+            window->setMaximumSize(QSize(settings->GetCustomResolutionWidth(), settings->GetCustomResolutionHeight()));
+        }
+        else
+        {
+            window->setMaximumSize(QSize(16777215, 16777215));
+            if(settings->GetWindowType() == WindowType::AdjustableResolution)
+            {
+                window->windowedTime();
+                if(!settings->GetStreamGeometry().isEmpty())
+                    window->setGeometry(settings->GetStreamGeometry());
+            }
+            else if (connect_info.video_profile.width > 0 && connect_info.video_profile.height > 0)
+            {
+                window->resize(connect_info.video_profile.width, connect_info.video_profile.height);
+            }
+        }
     }
-    else if(settings->GetWindowType() == WindowType::AdjustableResolution)
+    else
     {
-        window->normalTime();
-        if(!settings->GetStreamGeometry().isEmpty())
-            window->setGeometry(settings->GetStreamGeometry());
+        // Maximized/fullscreen: drop any custom fixed-size constraint.
+        window->setMaximumSize(QSize(16777215, 16777215));
+        if(settings->GetWindowType() == WindowType::CustomResolution)
+        {
+            // Keep custom size as the restore size when leaving maximized/fullscreen.
+            window->resize(settings->GetCustomResolutionWidth(), settings->GetCustomResolutionHeight());
+        }
+        else if(settings->GetWindowType() == WindowType::AdjustableResolution)
+        {
+            if(!settings->GetStreamGeometry().isEmpty())
+                window->setGeometry(settings->GetStreamGeometry());
+        }
+        else if (connect_info.video_profile.width > 0 && connect_info.video_profile.height > 0)
+        {
+            window->resize(connect_info.video_profile.width, connect_info.video_profile.height);
+        }
     }
-    else if (connect_info.video_profile.width > 0 && connect_info.video_profile.height > 0)
-    {
-        window->resize(connect_info.video_profile.width, connect_info.video_profile.height);
-    }
+
+    // Apply the requested chrome last so it wins over any prior state.
+    window->applyStreamWindowMode(win_mode);
 }
 
 #if CHIAKI_GUI_ENABLE_STEAM_SHORTCUT

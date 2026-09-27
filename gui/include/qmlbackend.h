@@ -26,6 +26,8 @@ class SystemdInhibit;
 #elif defined(Q_OS_WINDOWS)
     class WindowsWakeSleep;
 #endif
+class FramePublisher;
+class AutomationServer;
 
 class QmlRegist : public QObject
 {
@@ -118,6 +120,8 @@ public:
     QmlSettings *qmlSettings() const;
     StreamSession *qmlSession() const;
     QList<QmlController*> qmlControllers() const;
+    FramePublisher *framePublisher() const { return frame_publisher; }
+    AutomationServer *automationServer() const { return automation_server; }
 
     bool discoveryEnabled() const;
     void setDiscoveryEnabled(bool enabled);
@@ -170,10 +174,13 @@ public:
 
     void setIsAppActive();
 
+    void restartAutomationServer();
+
     void profileChanged();
     bool prepareFrameForPresentation(ChiakiFfmpegFrame &frame, bool use_opengl_renderer);
     void prepareStartupPresentation(bool present_warmup);
     void applyStartupWindowSizing();
+    void applyStreamWindowModeAndSizing(StreamWindowMode mode);
 
     void goToSleep();
 
@@ -287,6 +294,8 @@ private:
     QmlMainWindow *window = {};
     StreamSession *session = {};
     QThread *frame_thread = {};
+    FramePublisher *frame_publisher = {};
+    AutomationServer *automation_server = {};
     QTimer *psn_reconnect_timer = {};
     QTimer *psn_auto_connect_timer = {};
     QTimer *wakeup_start_timer = {};

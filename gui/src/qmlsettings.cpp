@@ -610,6 +610,128 @@ void QmlSettings::setWindowType(int type)
     emit windowTypeChanged();
 }
 
+int QmlSettings::streamWindowMode() const
+{
+    return static_cast<int>(settings->GetStreamWindowMode());
+}
+
+void QmlSettings::setStreamWindowMode(int mode)
+{
+    if(mode < 0 || mode > 2)
+        return;
+    settings->SetStreamWindowMode(static_cast<StreamWindowMode>(mode));
+    emit streamWindowModeChanged();
+}
+
+bool QmlSettings::automationEnabled() const
+{
+    return settings->GetAutomationEnabled();
+}
+
+void QmlSettings::setAutomationEnabled(bool enabled)
+{
+    settings->SetAutomationEnabled(enabled);
+    emit automationEnabledChanged();
+}
+
+bool QmlSettings::automationExclusive() const
+{
+    return settings->GetAutomationExclusive();
+}
+
+void QmlSettings::setAutomationExclusive(bool exclusive)
+{
+    settings->SetAutomationExclusive(exclusive);
+    emit automationExclusiveChanged();
+}
+
+int QmlSettings::automationPort() const
+{
+    return settings->GetAutomationPort();
+}
+
+void QmlSettings::setAutomationPort(int port)
+{
+    if(port < 0 || port > 65535)
+        return;
+    settings->SetAutomationPort(port);
+    emit automationPortChanged();
+}
+
+int QmlSettings::automationUdpPort() const
+{
+    return settings->GetAutomationUdpPort();
+}
+
+void QmlSettings::setAutomationUdpPort(int port)
+{
+    if(port < 0 || port > 65535)
+        return;
+    settings->SetAutomationUdpPort(port);
+    emit automationUdpPortChanged();
+}
+
+QString QmlSettings::automationToken() const
+{
+    return settings->GetAutomationToken();
+}
+
+void QmlSettings::setAutomationToken(const QString &token)
+{
+    settings->SetAutomationToken(token);
+    emit automationTokenChanged();
+}
+
+bool QmlSettings::framePublishEnabled() const
+{
+    return settings->GetFramePublishEnabled();
+}
+
+void QmlSettings::setFramePublishEnabled(bool enabled)
+{
+    settings->SetFramePublishEnabled(enabled);
+    emit framePublishEnabledChanged();
+}
+
+int QmlSettings::framePublishWidth() const
+{
+    return settings->GetFramePublishWidth();
+}
+
+void QmlSettings::setFramePublishWidth(int w)
+{
+    if(w < 160 || w > 3840)
+        return;
+    settings->SetFramePublishWidth(w);
+    emit framePublishWidthChanged();
+}
+
+int QmlSettings::framePublishHeight() const
+{
+    return settings->GetFramePublishHeight();
+}
+
+void QmlSettings::setFramePublishHeight(int h)
+{
+    if(h < 90 || h > 2160)
+        return;
+    settings->SetFramePublishHeight(h);
+    emit framePublishHeightChanged();
+}
+
+int QmlSettings::framePublishQuality() const
+{
+    return settings->GetFramePublishQuality();
+}
+
+void QmlSettings::setFramePublishQuality(int q)
+{
+    if(q < 10 || q > 100)
+        return;
+    settings->SetFramePublishQuality(q);
+    emit framePublishQualityChanged();
+}
+
 uint QmlSettings::customResolutionWidth() const
 {
     return settings->GetCustomResolutionWidth();
@@ -1932,6 +2054,16 @@ void QmlSettings::refreshAllKeys()
     emit portGuessSocketCountChanged();
     emit decoderChanged();
     emit windowTypeChanged();
+    emit streamWindowModeChanged();
+    emit automationEnabledChanged();
+    emit automationExclusiveChanged();
+    emit automationPortChanged();
+    emit automationUdpPortChanged();
+    emit automationTokenChanged();
+    emit framePublishEnabledChanged();
+    emit framePublishWidthChanged();
+    emit framePublishHeightChanged();
+    emit framePublishQualityChanged();
     emit customResolutionWidthChanged();
     emit customResolutionHeightChanged();
     emit sZoomFactorChanged();

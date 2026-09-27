@@ -92,6 +92,7 @@ class SdeckHapticsWorker;
 		bool fullscreen;
 		bool zoom;
 		bool stretch;
+		StreamWindowMode window_mode = StreamWindowMode::Fullscreen;
 		bool enable_keyboard;
 		bool keyboard_controller_enabled;
 		bool mouse_touch_enabled;
@@ -137,7 +138,8 @@ class SdeckHapticsWorker;
 			bool auto_regist,
 			bool fullscreen,
 			bool zoom,
-			bool stretch);
+			bool stretch,
+			StreamWindowMode window_mode = StreamWindowMode::Fullscreen);
 };
 
 struct MicBuf
@@ -292,6 +294,14 @@ class StreamSession : public QObject
 		QAtomicInteger<bool> mic_active = true;
 		QMap<Qt::Key, int> key_map;
 		QElapsedTimer connect_timer;
+		// Low-latency automation / AI input channel. OR-ed into the final
+		// controller state in SendFeedbackState()/DpadSendFeedbackState().
+		// Updated from any thread; guarded by automation_mutex.
+		QMutex automation_mutex;
+		ChiakiControllerState automation_state;
+		bool automation_active = false;
+		bool automation_exclusive = false;
+		QAtomicInteger<int> automation_feedback_pending = 0;
 
 		void StartAudioOutDrainThread();
 		void StopAudioOutDrainThread();
@@ -375,6 +385,15 @@ class StreamSession : public QObject
 		void ReadMic(const QByteArray &micdata);
 
 		void BlockInput(bool block) { input_block = block ? 1 : 2; SendFeedbackState(); }
+
+		// Automation / AI remote-control input. Thread-safe, minimal latency:
+		// stores the state and coalesces a SendFeedbackState() on the GUI thread.
+		void SetAutomationState(const ChiakiControllerState &state);
+		void ClearAutomationState();
+		bool HasAutomationState();
+		ChiakiControllerState GetAutomationState();
+		void SetAutomationExclusive(bool exclusive);
+		bool IsAutomationExclusive();
 
 	signals:
 		void FfmpegFrameAvailable();

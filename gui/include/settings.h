@@ -82,6 +82,12 @@ enum class WindowType {
 	Stretch
 };
 
+enum class StreamWindowMode {
+	Windowed = 0,
+	Maximized = 1,
+	Fullscreen = 2
+};
+
 enum class PlaceboUpscaler {
 	None,
 	Nearest,
@@ -366,6 +372,28 @@ class Settings : public QObject
 
 		WindowType GetWindowType() const;
 		void SetWindowType(WindowType type);
+
+		StreamWindowMode GetStreamWindowMode() const;
+		void SetStreamWindowMode(StreamWindowMode mode);
+
+		bool GetAutomationEnabled() const { return settings.value("settings/automation_enabled", false).toBool(); }
+		void SetAutomationEnabled(bool enabled) { settings.setValue("settings/automation_enabled", enabled); }
+		bool GetAutomationExclusive() const { return settings.value("settings/automation_exclusive", false).toBool(); }
+		void SetAutomationExclusive(bool enabled) { settings.setValue("settings/automation_exclusive", enabled); }
+		int GetAutomationPort() const { return settings.value("settings/automation_port", 19090).toInt(); }
+		void SetAutomationPort(int port) { settings.setValue("settings/automation_port", port); }
+		int GetAutomationUdpPort() const { return settings.value("settings/automation_udp_port", 19091).toInt(); }
+		void SetAutomationUdpPort(int port) { settings.setValue("settings/automation_udp_port", port); }
+		QString GetAutomationToken() const { return settings.value("settings/automation_token", "").toString(); }
+		void SetAutomationToken(const QString &token) { settings.setValue("settings/automation_token", token); }
+		bool GetFramePublishEnabled() const { return settings.value("settings/frame_publish_enabled", true).toBool(); }
+		void SetFramePublishEnabled(bool enabled) { settings.setValue("settings/frame_publish_enabled", enabled); }
+		int GetFramePublishWidth() const { return settings.value("settings/frame_publish_width", 960).toInt(); }
+		void SetFramePublishWidth(int w) { settings.setValue("settings/frame_publish_width", w); }
+		int GetFramePublishHeight() const { return settings.value("settings/frame_publish_height", 540).toInt(); }
+		void SetFramePublishHeight(int h) { settings.setValue("settings/frame_publish_height", h); }
+		int GetFramePublishQuality() const { return settings.value("settings/frame_publish_quality", 80).toInt(); }
+		void SetFramePublishQuality(int q) { settings.setValue("settings/frame_publish_quality", q); }
 
 		uint GetCustomResolutionWidth() const;
 		void SetCustomResolutionWidth(uint width);

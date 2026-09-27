@@ -269,9 +269,10 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
 		QString initial_login_pin,
 		QString duid,
 		bool auto_regist,
-		bool fullscreen, 
-		bool zoom, 
-		bool stretch)
+		bool fullscreen,
+		bool zoom,
+		bool stretch,
+		StreamWindowMode window_mode)
 	: settings(settings)
 {
 	key_map = settings->GetControllerMappingForDecoding();
@@ -300,6 +301,7 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
 	this->fullscreen = fullscreen;
 	this->zoom = zoom;
 	this->stretch = stretch;
+	this->window_mode = window_mode;
 	const bool keyboard_controller_enabled_setting = settings->GetKeyboardEnabled();
 	this->keyboard_controller_enabled = keyboard_controller_enabled_setting;
 	this->mouse_touch_enabled = settings->GetMouseTouchEnabled();
@@ -514,6 +516,10 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 
 	chiaki_controller_state_set_idle(&keyboard_state);
 	chiaki_controller_state_set_idle(&touch_state);
+	chiaki_controller_state_set_idle(&automation_state);
+	automation_active = false;
+	automation_exclusive = false;
+	automation_feedback_pending.storeRelaxed(0);
 	touch_tracker=QMap<int, uint8_t>();
 	mouse_touch_id=-1;
 	dpad_touch_id =-1;
@@ -1220,22 +1226,37 @@ void StreamSession::DpadSendFeedbackState()
 	ChiakiControllerState state;
 	chiaki_controller_state_set_idle(&state);
 
+	bool exclusive = false;
+	{
+		QMutexLocker locker(&automation_mutex);
+		exclusive = automation_exclusive && automation_active;
+		if(exclusive)
+			state = automation_state;
+	}
+	if(!exclusive)
+	{
 #if CHIAKI_GUI_ENABLE_SETSU
-	// setsu is the one that potentially has gyro/accel/orient so copy that directly first
-	state = setsu_state;
+		// setsu is the one that potentially has gyro/accel/orient so copy that directly first
+		state = setsu_state;
 #endif
 
-	for(auto controller : controllers)
-	{
-		auto controller_state = controller->GetState();
-		chiaki_controller_state_or(&state, &state, &controller_state);
-	}
+		for(auto controller : controllers)
+		{
+			auto controller_state = controller->GetState();
+			chiaki_controller_state_or(&state, &state, &controller_state);
+		}
 
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
-	chiaki_controller_state_or(&state, &state, &sdeck_state);
+		chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
-	chiaki_controller_state_or(&state, &state, &keyboard_state);
-	chiaki_controller_state_or(&state, &state, &touch_state);
+		chiaki_controller_state_or(&state, &state, &keyboard_state);
+		chiaki_controller_state_or(&state, &state, &touch_state);
+		{
+			QMutexLocker locker(&automation_mutex);
+			if(automation_active)
+				chiaki_controller_state_or(&state, &state, &automation_state);
+		}
+	}
 
 	if(input_block)
 	{
@@ -1276,22 +1297,37 @@ void StreamSession::SendFeedbackState()
 	ChiakiControllerState state;
 	chiaki_controller_state_set_idle(&state);
 
+	bool exclusive = false;
+	{
+		QMutexLocker locker(&automation_mutex);
+		exclusive = automation_exclusive && automation_active;
+		if(exclusive)
+			state = automation_state;
+	}
+	if(!exclusive)
+	{
 #if CHIAKI_GUI_ENABLE_SETSU
-	// setsu is the one that potentially has gyro/accel/orient so copy that directly first
-	state = setsu_state;
+		// setsu is the one that potentially has gyro/accel/orient so copy that directly first
+		state = setsu_state;
 #endif
 
-	for(auto controller : controllers)
-	{
-		auto controller_state = controller->GetState();
-		chiaki_controller_state_or(&state, &state, &controller_state);
-	}
+		for(auto controller : controllers)
+		{
+			auto controller_state = controller->GetState();
+			chiaki_controller_state_or(&state, &state, &controller_state);
+		}
 
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
-	chiaki_controller_state_or(&state, &state, &sdeck_state);
+		chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
-	chiaki_controller_state_or(&state, &state, &keyboard_state);
-	chiaki_controller_state_or(&state, &state, &touch_state);
+		chiaki_controller_state_or(&state, &state, &keyboard_state);
+		chiaki_controller_state_or(&state, &state, &touch_state);
+		{
+			QMutexLocker locker(&automation_mutex);
+			if(automation_active)
+				chiaki_controller_state_or(&state, &state, &automation_state);
+		}
+	}
 
 	if(input_block)
 	{
@@ -1325,6 +1361,72 @@ void StreamSession::SendFeedbackState()
 	}
 	chiaki_controller_state_or(&state, &state, &dpad_touch_state);
 	chiaki_session_set_controller_state(&session, &state);
+}
+
+void StreamSession::SetAutomationState(const ChiakiControllerState &state)
+{
+	{
+		QMutexLocker locker(&automation_mutex);
+		automation_state = state;
+		automation_active = true;
+	}
+	// Coalesce feedback: at most one queued SendFeedbackState per burst.
+	if(automation_feedback_pending.fetchAndStoreRelaxed(1) == 0)
+	{
+		QMetaObject::invokeMethod(this, [this]() {
+			automation_feedback_pending.storeRelaxed(0);
+			SendFeedbackState();
+		}, Qt::QueuedConnection);
+	}
+}
+
+void StreamSession::ClearAutomationState()
+{
+	{
+		QMutexLocker locker(&automation_mutex);
+		chiaki_controller_state_set_idle(&automation_state);
+		automation_active = false;
+	}
+	if(automation_feedback_pending.fetchAndStoreRelaxed(1) == 0)
+	{
+		QMetaObject::invokeMethod(this, [this]() {
+			automation_feedback_pending.storeRelaxed(0);
+			SendFeedbackState();
+		}, Qt::QueuedConnection);
+	}
+}
+
+bool StreamSession::HasAutomationState()
+{
+	QMutexLocker locker(&automation_mutex);
+	return automation_active;
+}
+
+ChiakiControllerState StreamSession::GetAutomationState()
+{
+	QMutexLocker locker(&automation_mutex);
+	return automation_state;
+}
+
+void StreamSession::SetAutomationExclusive(bool exclusive)
+{
+	bool changed = false;
+	{
+		QMutexLocker locker(&automation_mutex);
+		if(automation_exclusive != exclusive)
+		{
+			automation_exclusive = exclusive;
+			changed = true;
+		}
+	}
+	if(changed)
+		SendFeedbackState();
+}
+
+bool StreamSession::IsAutomationExclusive()
+{
+	QMutexLocker locker(&automation_mutex);
+	return automation_exclusive;
 }
 
 void StreamSession::InitAudio(unsigned int channels, unsigned int rate)
